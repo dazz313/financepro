@@ -19,15 +19,21 @@ export type AccountWithBalance = {
 
 // Ambil semua akun + total debit/kredit sampai tanggal tertentu (atau seluruhnya)
 export async function getAccountBalances(untilDate?: Date) {
+  // Ambil ID entry yang sudah di-reversal, lalu filter journal lines
+  const reversedEntryIds = (
+    await db.journalEntry.findMany({
+      where: { isReversed: true },
+      select: { id: true },
+    })
+  ).map((e) => e.id);
+
   const accounts = await db.account.findMany({
     orderBy: { code: "asc" },
     include: {
       lines: {
         where: {
-          entry: {
-            isReversed: false,
-            ...(untilDate ? { date: { lte: untilDate } } : {}),
-          },
+          entryId: { notIn: reversedEntryIds },
+          ...(untilDate ? { entry: { date: { lte: untilDate } } } : {}),
         },
         select: { debit: true, credit: true },
       },
