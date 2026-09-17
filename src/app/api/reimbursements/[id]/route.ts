@@ -13,10 +13,16 @@ interface RouteContext {
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
+  if (user.role !== "ADMIN" && user.role !== "SUPERADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
+
+  // Approval hanya untuk SUPERADMIN
+  const body = await req.json();
+  if (body.status && ["APPROVED", "REJECTED"].includes(body.status) && user.role !== "SUPERADMIN") {
+    return NextResponse.json({ error: "Hanya Super Admin yang dapat menyetujui/menolak" }, { status: 403 });
+  }
+
   try {
     const { id } = await ctx.params;
-    const body = await req.json();
     const rm = await db.employeeReimbursement.findUnique({ where: { id } });
     if (!rm) return NextResponse.json({ error: "Reimburse tidak ditemukan" }, { status: 404 });
 

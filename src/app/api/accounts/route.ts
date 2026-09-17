@@ -8,7 +8,7 @@ import { getUserFromRequest } from "@/lib/auth";
 async function requireAdmin(req: NextRequest): Promise<null | NextResponse> {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
+  if (user.role !== "ADMIN" && user.role !== "SUPERADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
   return null;
 }
 

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
   }
-  if (user.role !== "ADMIN") {
+  if (user.role !== "ADMIN" && user.role !== "SUPERADMIN") {
     return NextResponse.json({ error: "Hanya admin yang dapat menambah aturan pajak" }, { status: 403 });
   }
   try {
@@ -74,7 +74,7 @@ export async function PUT(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
   }
-  if (user.role !== "ADMIN") {
+  if (user.role !== "ADMIN" && user.role !== "SUPERADMIN") {
     return NextResponse.json({ error: "Hanya admin yang dapat melakukan reset pajak" }, { status: 403 });
   }
   try {

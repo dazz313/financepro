@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         email: "admin@finance.pro",
         name: "Administrator",
         passwordHash,
-        role: "ADMIN",
+        role: "SUPERADMIN",
         isActive: true,
         preferences: { create: {} },
       },
@@ -423,7 +423,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
+  if (user.role !== "ADMIN" && user.role !== "SUPERADMIN") return NextResponse.json({ error: "Hanya admin" }, { status: 403 });
   try {
     await db.fixedAssetDepreciation.deleteMany();
     await db.fixedAsset.deleteMany();

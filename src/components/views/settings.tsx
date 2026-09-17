@@ -77,6 +77,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { AccountsView } from "@/components/views/accounts";
 
@@ -113,6 +121,7 @@ const TABS = [
   { key: "tax", label: "Pajak", desc: "Tarif PPN default", icon: Percent },
   { key: "documents", label: "Faktur & Jurnal", desc: "Penomoran & tanda tangan", icon: FileText },
   { key: "appearance", label: "Tampilan", desc: "Tema & format tanggal", icon: Palette },
+  { key: "users", label: "Pengguna", desc: "Kelola akun & role", icon: UserCog },
   { key: "security", label: "Keamanan", desc: "Ubah password akun", icon: Lock },
   { key: "data", label: "Data", desc: "Backup, restore & reset", icon: Database },
   { key: "logs", label: "Riwayat", desc: "Audit log perubahan", icon: History },
@@ -2537,6 +2546,231 @@ function SettingsFeatureGrid({
   );
 }
 
+// ---------- Users Tab (SUPERADMIN only) ----------
+
+import { useRole } from "@/components/auth-provider";
+import { ROLES, ROLE_LABELS, type Role } from "@/lib/types";
+
+function UsersTab() {
+  const { canManageUsers } = useRole();
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = React.useState(false);
+  const [editUser, setEditUser] = React.useState<{ id: string; name: string; email: string; role: string; isActive: boolean } | null>(null);
+
+  const usersQuery = useQuery<{ users: { id: string; email: string; name: string; role: string; isActive: boolean; lastLoginAt: string | null; createdAt: string }[] }>({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await authFetch("/api/users");
+      if (!res.ok) throw new Error("Gagal memuat daftar user");
+      return res.json();
+    },
+    enabled: canManageUsers,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await authFetch(`/api/users/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error || "Gagal menonaktifkan user");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("User berhasil dinonaktifkan");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (!canManageUsers) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-muted-foreground">
+          Hanya Super Admin yang dapat mengelola pengguna.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const users = usersQuery.data?.users ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Pengelolaan Pengguna</h3>
+          <p className="text-sm text-muted-foreground">Buat, ubah, dan nonaktifkan akun pengguna</p>
+        </div>
+        <Button onClick={() => { setEditUser(null); setShowCreate(true); }}>
+          <Plus className="mr-2 h-4 w-4" /> Tambah User
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-3 text-left font-medium">Nama</th>
+                  <th className="px-4 py-3 text-left font-medium">Email</th>
+                  <th className="px-4 py-3 text-left font-medium">Role</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-left font-medium">Login Terakhir</th>
+                  <th className="px-4 py-3 text-right font-medium">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b last:border-0">
+                    <td className="px-4 py-3 font-medium">{u.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={u.role === "SUPERADMIN" ? "default" : "secondary"}>
+                        {ROLE_LABELS[u.role as Role] ?? u.role}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={u.isActive ? "default" : "destructive"}>
+                        {u.isActive ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setShowCreate(true); }}>
+                        Edit
+                      </Button>
+                      {u.isActive && (
+                        <Button variant="ghost" size="sm" className="text-rose-600" onClick={() => {
+                          if (confirm(`Nonaktifkan user ${u.name}?`)) deleteMutation.mutate(u.id);
+                        }}>
+                          Nonaktifkan
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Belum ada user</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {showCreate && (
+        <UserDialog
+          open={showCreate}
+          onOpenChange={setShowCreate}
+          editUser={editUser}
+          onSaved={() => { setShowCreate(false); setEditUser(null); qc.invalidateQueries({ queryKey: ["users"] }); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function UserDialog({
+  open,
+  onOpenChange,
+  editUser,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  editUser: { id: string; name: string; email: string; role: string; isActive: boolean } | null;
+  onSaved: () => void;
+}) {
+  const [name, setName] = React.useState(editUser?.name ?? "");
+  const [email, setEmail] = React.useState(editUser?.email ?? "");
+  const [password, setPassword] = React.useState("");
+  const [role, setRole] = React.useState<Role>((editUser?.role as Role) ?? "ADMIN");
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (editUser) {
+        const body: Record<string, unknown> = { name, email, role };
+        if (password) body.password = password;
+        const res = await authFetch(`/api/users/${editUser.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Gagal mengupdate user");
+        }
+        toast.success("User berhasil diupdate");
+      } else {
+        const res = await authFetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password, role }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Gagal membuat user");
+        }
+        toast.success("User berhasil dibuat");
+      }
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{editUser ? "Edit User" : "Tambah User Baru"}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="u-name">Nama</Label>
+            <Input id="u-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="u-email">Email</Label>
+            <Input id="u-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="u-password">{editUser ? "Password Baru (kosongkan jika tidak ubah)" : "Password"}</Label>
+            <Input id="u-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required={!editUser} minLength={8} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Role</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {editUser ? "Simpan" : "Buat"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------- Main view ----------
 
 export function SettingsView() {
@@ -2642,6 +2876,10 @@ export function SettingsView() {
           ) : (
             <AppearanceTab data={preferences} />
           )}
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-4">
+          <UsersTab />
         </TabsContent>
 
         <TabsContent value="security" className="mt-4">

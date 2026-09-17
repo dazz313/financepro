@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/components/auth-provider";
+import { useAuth, useRole } from "@/components/auth-provider";
 import { AppShell, type NavKey } from "@/components/app-shell";
 import { DashboardView } from "@/components/views/dashboard";
 import { AccountsView } from "@/components/views/accounts";
@@ -28,7 +28,7 @@ import { Leaf, Database, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useSettingsStore } from "@/lib/settings-store";
 
-const VALID_VIEWS: NavKey[] = ["dashboard", "bank-accounts", "receipts", "payments", "transfers", "accounts", "inventory", "fixed-assets", "invoices", "contacts", "employees", "csv", "reports", "tax", "settings"];
+const ALL_VIEWS: NavKey[] = ["dashboard", "bank-accounts", "receipts", "payments", "transfers", "accounts", "inventory", "fixed-assets", "invoices", "contacts", "employees", "csv", "reports", "tax", "settings"];
 
 function SetupScreen() {
   const qc = useQueryClient();
@@ -195,7 +195,9 @@ function AppContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const viewParam = searchParams.get("view") as NavKey | null;
-  const active: NavKey = viewParam && VALID_VIEWS.includes(viewParam) ? viewParam : "dashboard";
+  const { navKeys } = useRole();
+  const validViews = navKeys as readonly NavKey[];
+  const active: NavKey = viewParam && (validViews as readonly string[]).includes(viewParam) ? viewParam : "dashboard";
 
   const { user: sessionUser, loading: sessionLoading } = useAuth();
   const qc = useQueryClient();

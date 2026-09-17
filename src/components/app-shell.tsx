@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth, authFetch } from "@/components/auth-provider";
+import { useAuth, authFetch, useRole } from "@/components/auth-provider";
 import {
   LayoutDashboard,
   BookOpen,
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSettingsStore } from "@/lib/settings-store";
+import { ROLE_LABELS, type Role } from "@/lib/types";
 import { toast } from "sonner";
 import { AIAssistant } from "@/components/ai-assistant";
 
@@ -129,12 +130,17 @@ function NavLinks({
   active,
   onNavigate,
   counts,
+  allowedKeys,
 }: {
   active: NavKey;
   onNavigate?: () => void;
   counts?: Record<string, number>;
+  allowedKeys?: readonly NavKey[];
 }) {
-  const groups = Array.from(new Set(NAV_ITEMS.map((i) => i.group)));
+  const items = allowedKeys
+    ? NAV_ITEMS.filter((i) => (allowedKeys as readonly string[]).includes(i.key))
+    : NAV_ITEMS;
+  const groups = Array.from(new Set(items.map((i) => i.group)));
   return (
     <nav className="flex flex-col gap-5 px-3 py-4">
       {groups.map((group) => (
@@ -142,7 +148,7 @@ function NavLinks({
           <span className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {group}
           </span>
-          {NAV_ITEMS.filter((i) => i.group === group).map((item) => {
+          {items.filter((i) => i.group === group).map((item) => {
             const Icon = item.icon;
             const isActive = active === item.key;
             const count = counts?.[item.key];
@@ -188,8 +194,8 @@ function UserMenu() {
   const name = user.name ?? "User";
   const email = user.email ?? "";
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-  const role = user.role ?? "VIEWER";
-  const roleLabel = role === "ADMIN" ? "Administrator" : role === "ACCOUNTANT" ? "Akuntan" : "Penampil";
+  const role = (user.role ?? "INVENTORY_EMPLOYEE") as Role;
+  const roleLabel = ROLE_LABELS[role] ?? "Karyawan";
 
   const handleLogout = async () => {
     setSigningOut(true);
@@ -255,6 +261,7 @@ export function AppShell({
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const activeItem = NAV_ITEMS.find((i) => i.key === active);
+  const { navKeys } = useRole();
 
   const { data: countsData } = useQuery<{ counts: Record<string, number> }>({
     queryKey: ["nav-counts"],
@@ -275,7 +282,7 @@ export function AppShell({
             <Brand />
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin">
-            <NavLinks active={active} counts={countsData?.counts} />
+            <NavLinks active={active} counts={countsData?.counts} allowedKeys={navKeys} />
           </div>
           <div className="border-t border-sidebar-border p-3 space-y-2">
             <div className="flex items-center justify-between px-1">
@@ -304,7 +311,7 @@ export function AppShell({
                   <Brand />
                 </div>
                 <div className="overflow-y-auto">
-                  <NavLinks active={active} counts={countsData?.counts} onNavigate={() => setMobileOpen(false)} />
+                  <NavLinks active={active} counts={countsData?.counts} allowedKeys={navKeys} onNavigate={() => setMobileOpen(false)} />
                 </div>
                 <div className="border-t border-sidebar-border p-3">
                   <UserMenu />

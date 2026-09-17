@@ -10,9 +10,15 @@ interface RouteContext {
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
+
+  // Approval hanya untuk SUPERADMIN
+  const body = await req.json();
+  if (body.status && ["APPROVED", "REJECTED"].includes(body.status) && user.role !== "SUPERADMIN") {
+    return NextResponse.json({ error: "Hanya Super Admin yang dapat menyetujui/menolak" }, { status: 403 });
+  }
+
   try {
     const { id } = await ctx.params;
-    const body = await req.json();
     const leave = await db.employeeLeave.findUnique({ where: { id } });
     if (!leave) return NextResponse.json({ error: "Cuti/izin tidak ditemukan" }, { status: 404 });
 

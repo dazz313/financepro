@@ -1,5 +1,80 @@
 // Tipe untuk CompanySettings & UserPreferences (mirror Prisma model)
 
+// ============ ROLE & PERMISSIONS ============
+export const ROLES = ["SUPERADMIN", "ADMIN", "INVENTORY_EMPLOYEE"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  SUPERADMIN: "Super Admin",
+  ADMIN: "Admin",
+  INVENTORY_EMPLOYEE: "Karyawan Inventaris",
+};
+
+// Permission matrix — digunakan di frontend & proxy
+export const PERMISSIONS = {
+  SUPERADMIN: {
+    canApprove: true,
+    canManageUsers: true,
+    canSeeAllIndicators: true,
+    canSeeEmployeeIndicators: true,
+    canSeeEmployeeMenu: true,
+    canSeePayroll: true,
+    canEditSettings: true,
+    canSeeReports: true,
+    canSeeTax: true,
+    canSeeInventory: true,
+    canSeeBankAccounts: true,
+    canSeeInvoices: true,
+    canSeeContacts: true,
+    canSeeFixedAssets: true,
+    canSeeCsvImport: true,
+    navKeys: ["dashboard", "bank-accounts", "receipts", "payments", "transfers", "accounts", "inventory", "fixed-assets", "invoices", "contacts", "employees", "csv", "reports", "tax", "settings"] as const,
+  },
+  ADMIN: {
+    canApprove: false,
+    canManageUsers: false,
+    canSeeAllIndicators: true,
+    canSeeEmployeeIndicators: false,
+    canSeeEmployeeMenu: false,
+    canSeePayroll: false,
+    canEditSettings: true,
+    canSeeReports: true,
+    canSeeTax: true,
+    canSeeInventory: true,
+    canSeeBankAccounts: true,
+    canSeeInvoices: true,
+    canSeeContacts: true,
+    canSeeFixedAssets: true,
+    canSeeCsvImport: true,
+    navKeys: ["dashboard", "bank-accounts", "receipts", "payments", "transfers", "accounts", "inventory", "fixed-assets", "invoices", "contacts", "csv", "reports", "tax", "settings"] as const,
+  },
+  INVENTORY_EMPLOYEE: {
+    canApprove: false,
+    canManageUsers: false,
+    canSeeAllIndicators: false,
+    canSeeEmployeeIndicators: false,
+    canSeeEmployeeMenu: false,
+    canSeePayroll: false,
+    canEditSettings: false,
+    canSeeReports: false,
+    canSeeTax: false,
+    canSeeInventory: true,
+    canSeeBankAccounts: false,
+    canSeeInvoices: false,
+    canSeeContacts: false,
+    canSeeFixedAssets: false,
+    canSeeCsvImport: false,
+    navKeys: ["dashboard", "inventory"] as const,
+  },
+} as const;
+
+export function getPermissions(role: string): (typeof PERMISSIONS)[Role] {
+  if (role in PERMISSIONS) return PERMISSIONS[role as Role];
+  return PERMISSIONS.VIEWER ?? PERMISSIONS.INVENTORY_EMPLOYEE;
+}
+
+// ============ COMPANY SETTINGS ============
+
 export type CompanySettings = {
   id: string;
   name: string;

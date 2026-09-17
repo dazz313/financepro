@@ -1,13 +1,21 @@
 "use client";
 
 import * as React from "react";
+import { type Role, getPermissions } from "@/lib/types";
 
 export type AuthUser = {
   id: string;
   email: string;
   name: string;
-  role: string;
+  role: Role;
 };
+
+export function useRole() {
+  const { user } = useAuth();
+  const role = (user?.role ?? "INVENTORY_EMPLOYEE") as Role;
+  const perms = getPermissions(role);
+  return { role, ...perms };
+}
 
 type AuthContextValue = {
   user: AuthUser | null;

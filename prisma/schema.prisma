@@ -16,7 +16,7 @@ model User {
   email         String   @unique
   name          String
   passwordHash  String
-  role          String   @default("ADMIN") // ADMIN | ACCOUNTANT | VIEWER
+  role          String   @default("ADMIN") // SUPERADMIN | ADMIN | INVENTORY_EMPLOYEE
   isActive      Boolean  @default(true)
   lastLoginAt   DateTime?
   createdAt     DateTime @default(now())

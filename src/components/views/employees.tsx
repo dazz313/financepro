@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useRole } from "@/components/auth-provider";
 import {
   Users,
   Plus,
@@ -1731,6 +1732,7 @@ function CreateLeaveDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 
 function LeavesTab({ employees }: { employees: Employee[] }) {
   const qc = useQueryClient();
+  const { canApprove } = useRole();
   const [typeFilter, setTypeFilter] = React.useState("ALL");
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -1849,7 +1851,7 @@ function LeavesTab({ employees }: { employees: Employee[] }) {
                       <TableCell><LeaveStatusBadge status={l.status} /></TableCell>
                       <TableCell className="pr-4">
                         <div className="flex items-center justify-end gap-1">
-                          {l.status === "PENDING" && (
+                          {l.status === "PENDING" && canApprove && (
                             <>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Setujui" onClick={() => approveMutation.mutate({ id: l.id, status: "APPROVED" })}>
                                 <CheckCircle2 className="h-4 w-4" />
@@ -2062,6 +2064,7 @@ function CreateReimburseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
 function ReimbursementsTab() {
   const qc = useQueryClient();
+  const { canApprove } = useRole();
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const [createOpen, setCreateOpen] = React.useState(false);
 
@@ -2166,17 +2169,17 @@ function ReimbursementsTab() {
                       <TableCell><ReimburseStatusBadge status={r.status} /></TableCell>
                       <TableCell className="pr-4">
                         <div className="flex items-center justify-end gap-1">
-                          {r.status === "PENDING" && (
+                          {r.status === "PENDING" && canApprove && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-sky-600" title="Setujui" onClick={() => updateMutation.mutate({ id: r.id, status: "APPROVED" })}>
                               <BadgeCheck className="h-4 w-4" />
                             </Button>
                           )}
-                          {(r.status === "PENDING" || r.status === "APPROVED") && (
+                          {(r.status === "PENDING" || r.status === "APPROVED") && canApprove && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Bayar + Jurnal" onClick={() => updateMutation.mutate({ id: r.id, status: "PAID" })}>
                               <Banknote className="h-4 w-4" />
                             </Button>
                           )}
-                          {r.status === "PENDING" && (
+                          {r.status === "PENDING" && canApprove && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600" title="Tolak" onClick={() => updateMutation.mutate({ id: r.id, status: "REJECTED" })}>
                               <XCircle className="h-4 w-4" />
                             </Button>
