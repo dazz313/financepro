@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
+import { getUserFromRequest } from "@/lib/auth";
+import { createReversalJournal } from "@/lib/accounting-engine";
 
 // PATCH /api/invoices/[id]
 // - Jika body punya `lines` → edit lengkap (replace lines + recalc totals + rebuild jurnal)
@@ -356,15 +358,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // DELETE /api/invoices/[id]
-// Menghapus invoice beserta jurnal posting, pembayaran terkait, dan
-// pergerakan stok (reverse) agar buku besar tetap konsisten.
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// Membatalkan invoice dengan reversal journal (bukan hard delete).
+// Prinsip: jurnal yang sudah POSTED tidak boleh dihapus, hanya di-reversal.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getUserFromRequest(req);
     const { id } = await params;
     const invoice = await db.invoice.findUnique({ where: { id }, include: { lines: true } });
     if (!invoice) {
       return NextResponse.json({ error: "Invoice tidak ditemukan" }, { status: 404 });
     }
+
+    const today = new Date();
 
     await db.$transaction(async (tx) => {
       // 1. Kembalikan stok & hapus movement lama
@@ -376,22 +381,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         for (const l of itemLines) {
           const item = itemMap.get(l.itemId!);
           if (!item) continue;
-          // SALES → stok naik kembali; PURCHASE → stok turun
           const delta = invoice.type === "SALES" ? l.quantity : -l.quantity;
           await tx.inventoryItem.update({
             where: { id: item.id },
             data: { quantityOnHand: Math.max(0, item.quantityOnHand + delta) },
           });
         }
+        // Buat reversal jurnal untuk pergerakan stok terkait
+        const stockEntries = await tx.journalEntry.findMany({
+          where: { source: "MANUAL", reference: { in: itemLines.map((l) => `${l.itemId}-stock`) } },
+          select: { id: true },
+        });
+        for (const entry of stockEntries) {
+          const reversalNum = await nextCode(tx, "journal", { date: today });
+          await createReversalJournal(tx, entry.id, reversalNum, today, `Reversal stok ${invoice.number}`, user?.id);
+        }
         await tx.inventoryMovement.deleteMany({ where: { reference: invoice.number } });
       }
 
-      // 2. Hapus penerimaan/pembayaran yang menautkan ke invoice + jurnalnya
+      // 2. Reversal jurnal pembayaran/penerimaan terkait invoice
       const receipts = await tx.receipt.findMany({ where: { allocateToInvoiceId: invoice.id } });
       for (const r of receipts) {
         if (r.journalEntryId) {
-          await tx.journalLine.deleteMany({ where: { entryId: r.journalEntryId } });
-          await tx.journalEntry.delete({ where: { id: r.journalEntryId } });
+          const entry = await tx.journalEntry.findUnique({ where: { id: r.journalEntryId } });
+          if (entry && !entry.isReversed) {
+            const reversalNum = await nextCode(tx, "journal", { date: today });
+            await createReversalJournal(tx, entry.id, reversalNum, today, `Reversal penerimaan ${invoice.number}`, user?.id);
+          }
         }
       }
       await tx.receipt.deleteMany({ where: { allocateToInvoiceId: invoice.id } });
@@ -399,30 +415,36 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       const payments = await tx.payment.findMany({ where: { allocateToInvoiceId: invoice.id } });
       for (const p of payments) {
         if (p.journalEntryId) {
-          await tx.journalLine.deleteMany({ where: { entryId: p.journalEntryId } });
-          await tx.journalEntry.delete({ where: { id: p.journalEntryId } });
+          const entry = await tx.journalEntry.findUnique({ where: { id: p.journalEntryId } });
+          if (entry && !entry.isReversed) {
+            const reversalNum = await nextCode(tx, "journal", { date: today });
+            await createReversalJournal(tx, entry.id, reversalNum, today, `Reversal pembayaran ${invoice.number}`, user?.id);
+          }
         }
       }
       await tx.payment.deleteMany({ where: { allocateToInvoiceId: invoice.id } });
 
-      // 3. Hapus entry jurnal posting invoice (cascade menghapus barisnya)
+      // 3. Reversal jurnal posting invoice
       const entries = await tx.journalEntry.findMany({
         where: { sourceId: invoice.id, source: { in: ["SALES_INVOICE", "PURCHASE_INVOICE"] } },
-        select: { id: true },
       });
-      for (const e of entries) {
-        await tx.journalLine.deleteMany({ where: { entryId: e.id } });
-        await tx.journalEntry.delete({ where: { id: e.id } });
+      for (const entry of entries) {
+        if (!entry.isReversed) {
+          const reversalNum = await nextCode(tx, "journal", { date: today });
+          await createReversalJournal(tx, entry.id, reversalNum, today, `Reversal invoice ${invoice.number}`, user?.id);
+        }
       }
 
-      // 4. Hapus invoice & lines
-      await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
-      await tx.invoice.delete({ where: { id } });
+      // 4. Tandai invoice sebagai CANCELLED (bukan hapus)
+      await tx.invoice.update({
+        where: { id },
+        data: { status: "CANCELLED" },
+      });
     });
 
-    return NextResponse.json({ message: "Invoice dihapus (termasuk pembayaran & jurnal terkait)" });
+    return NextResponse.json({ message: "Invoice dibatalkan dengan reversal journal (audit trail terjaga)" });
   } catch (error) {
     console.error("Invoice DELETE error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal menghapus invoice" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal membatalkan invoice" }, { status: 500 });
   }
 }
