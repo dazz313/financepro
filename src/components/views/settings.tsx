@@ -1781,6 +1781,11 @@ function DataTab() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {/* Close Period */}
+        <ClosePeriod />
+
+        <Separator />
+
         {/* Backup & Restore */}
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1931,6 +1936,108 @@ function DataTab() {
         </AlertDialog>
       </CardFooter>
     </Card>
+  );
+}
+
+// ---------- Close Period ----------
+
+function ClosePeriod() {
+  const qc = useQueryClient();
+  const [showConfirm, setShowConfirm] = React.useState(false);
+
+  const settingsQuery = useQuery<{ settings: CompanySettings }>({
+    queryKey: ["settings", "company"],
+    queryFn: async () => {
+      const res = await authFetch("/api/settings/company");
+      if (!res.ok) throw new Error("Gagal memuat pengaturan");
+      return res.json();
+    },
+  });
+
+  const lockedUntil = (settingsQuery.data?.settings as Record<string, unknown>)?.periodLockedUntil as string | null | undefined;
+
+  const closeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch("/api/settings/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodLockedUntil: new Date().toISOString() }),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error || "Gagal menutup periode");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Periode ditutup", { description: "Jurnal baru tidak boleh sebelum tanggal ini" });
+      setShowConfirm(false);
+      qc.invalidateQueries({ queryKey: ["settings", "company"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch("/api/settings/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodLockedUntil: null }),
+      });
+      if (!res.ok) throw new Error("Gagal membuka periode");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Periode dibuka", { description: "Jurnal boleh dibuat kapan saja" });
+      qc.invalidateQueries({ queryKey: ["settings", "company"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Tutup Periode
+      </p>
+      <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Kunci Periode Akuntansi</p>
+          <p className="text-xs text-muted-foreground">
+            {lockedUntil
+              ? `Periode ditutup per ${new Date(lockedUntil).toLocaleDateString("id-ID")}. Jurnal tidak boleh sebelum tanggal ini.`
+              : "Belum ada periode yang dikunci. Semua tanggal jurnal diizinkan."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {lockedUntil ? (
+            <Button variant="outline" size="sm" onClick={() => unlockMutation.mutate()} disabled={unlockMutation.isPending}>
+              Buka Periode
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setShowConfirm(true)}>
+              Tutup Periode
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tutup Periode?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Semua jurnal baru tidak boleh di-backdate ke sebelum tanggal ini. Dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={() => closeMutation.mutate()} disabled={closeMutation.isPending}>
+              Ya, Tutup Periode
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
 

@@ -264,6 +264,8 @@ model Invoice {
   withholdingRate Float @default(0) // persen Potongan Pajak Penghasilan (PPh), utk pembelian
   total     Float    @default(0)
   paidAmount Float   @default(0)
+  downPayment Float  @default(0) // Uang muka / DP diterima (untuk service)
+  downPaymentJournalId String? // Jurnal DP terkait
   footnote  String?  // catatan kaki dokumen (Manager.io Footnote)
   customTitle String? // judul kustom dokumen (Manager.io Custom Title)
   showLineNumber Boolean @default(false) // tampilkan kolom nomor baris
