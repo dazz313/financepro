@@ -1,0 +1,778 @@
+// Prisma schema for a double-entry accounting application (manager.io style)
+// Berdasarkan kaidah akuntansi berpasangan (Double-Entry Bookkeeping)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USER ============
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          String   @default("ADMIN") // ADMIN | ACCOUNTANT | VIEWER
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  preferences   UserPreferences?
+  settingsLogs  SettingsLog[]
+}
+
+// ============ SETTINGS LOG (Riwayat Perubahan Pengaturan) ============
+// Catatan audit: siapa, kapan, dan apa yang diubah pada pengaturan
+// (profil perusahaan, preferensi user, password).
+model SettingsLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  section     String   // COMPANY | PREFERENCES | PASSWORD
+  action      String   // CREATE | UPDATE | PASSWORD_CHANGED
+  summary     String   // ringkasan singkat perubahan (human readable)
+  changes     String?  // JSON array [{ field, label, before, after }]
+  createdAt   DateTime @default(now())
+
+  @@index([section])
+  @@index([createdAt])
+}
+
+// Preferensi per user (theme, density, number format)
+model UserPreferences {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme         String   @default("system") // light | dark | system
+  density       String   @default("comfortable") // comfortable | compact
+  numberFormat  String   @default("id-ID") // id-ID (1.000,50) | en-US (1,000.50)
+  dateFormat    String   @default("DD/MM/YYYY") // DD/MM/YYYY | YYYY-MM-DD
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ============ COMPANY SETTINGS (singleton) ============
+// Pengaturan perusahaan mirip Manager.io.
+// Hanya 1 baris aktif (id = "default") untuk seluruh aplikasi.
+model CompanySettings {
+  id              String   @id @default("default")
+  name            String   @default("Perusahaan Saya")
+  legalName       String?
+  taxId           String?  // NPWP
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  postalCode      String?
+  country         String   @default("Indonesia")
+  currencyCode    String   @default("IDR")
+  currencySymbol  String   @default("Rp")
+  currencyPosition String  @default("before") // before | after
+  decimalPlaces   Int      @default(0)
+  thousandSeparator String @default(".") // . | , | space | none
+  decimalSeparator String  @default(",") // . | ,
+  locale          String   @default("id-ID")
+  fiscalYearStartMonth Int @default(1) // 1-12 (Jan=1)
+  fiscalYearStartDay   Int @default(1)
+  defaultTaxRate  Float    @default(11) // PPN default persen
+  taxIncluded     Boolean  @default(false) // harga sudah termasuk pajak
+  ppnEnabled      Boolean  @default(true) // aktif/nonaktif PPN (disable = faktur tanpa PPN)
+  bpjsEmployerRate Float   @default(4) // % iuran BPJS Kesehatan pemberi kerja (payroll)
+  logoUrl         String?
+  companyCode     String   @default("") // kode unik perusahaan untuk penomoran
+  numberingFormat String   @default("{prefix}-{companyCode}-{year}-{month}-{seq}") // template: {prefix}, {companyCode}, {year}, {month}, {seq}
+  invoicePrefix   String   @default("INV")
+  invoiceStartNumber Int   @default(1)
+  // Nomor invoice berikutnya yang akan dipakai auto-increment
+  nextInvoiceNumber Int   @default(1)
+  quotePrefix     String   @default("QTN")
+  quoteStartNumber Int     @default(1)
+  nextQuoteNumber  Int     @default(1)
+  orderPrefix     String   @default("ORD")
+  orderStartNumber Int     @default(1)
+  nextOrderNumber  Int     @default(1)
+  // Pengaturan default untuk dokumen invoice
+  defaultPaymentTermsDays Int @default(30) // default jatuh tempo (hari)
+  invoiceSignature String? // nama penandatangan default (mis. "Budi Santoso, Direktur")
+  invoiceSignatureTitle String? // jabatan penandatangan (mis. "Direktur Utama")
+invoiceFooterNote String? // catatan kaki default (mis. "Terima kasih atas kerja sama Anda")
+  invoiceNote       String   @default("Barang yang sudah dibeli tidak dapat ditukar/dikembalikan.") // catatan invoice (mis. kebijakan retur), tampil sebagai catatan dokumen
+  docGreeting       String? // salam hormat (mis. "Hormat kami,")
+  docPicName       String? // nama PIC (mis. "Budi Santoso")
+  docPicPhone      String? // nomor PIC (mis. "081234567890")
+  // Akun bank untuk pembayaran (tampil di invoice)
+  invoiceBankName    String? // mis. "Bank BCA"
+  invoiceBankAccount String? // nomor rekening
+  invoiceBankHolder  String? // nama pemilik rekening
+  journalPrefix   String   @default("JE")
+  journalStartNumber Int   @default(1)
+  nextJournalNumber  Int   @default(1)
+  openingPrefix   String   @default("OP")
+  openingStartNumber Int   @default(1)
+  nextOpeningNumber Int    @default(1)
+  receiptPrefix   String   @default("RCV")
+  receiptStartNumber Int   @default(1)
+  nextReceiptNumber Int    @default(1)
+  paymentPrefix   String   @default("PMT")
+  paymentStartNumber Int   @default(1)
+  nextPaymentNumber Int    @default(1)
+  transferPrefix  String   @default("TRF")
+  transferStartNumber Int  @default(1)
+  nextTransferNumber Int   @default(1)
+  payrollPrefix   String   @default("PAY")
+  payrollStartNumber Int   @default(1)
+  nextPayrollNumber Int    @default(1)
+  reimbursementPrefix String @default("RMB")
+  reimbursementStartNumber Int @default(1)
+  nextReimbursementNumber Int @default(1)
+  loanPrefix      String   @default("LN")
+  loanStartNumber Int      @default(1)
+  nextLoanNumber  Int      @default(1)
+  employeePrefix  String   @default("EMP")
+  employeeStartNumber Int  @default(1)
+  nextEmployeeNumber Int   @default(1)
+  contactPrefix   String   @default("CUS")
+  contactStartNumber Int   @default(1)
+  nextContactNumber Int    @default(1)
+  bankAccountPrefix String @default("BA")
+  bankAccountStartNumber Int @default(1)
+  nextBankAccountNumber Int @default(1)
+  fixedAssetPrefix String  @default("FA")
+  fixedAssetStartNumber Int @default(1)
+  nextFixedAssetNumber Int @default(1)
+  inventoryItemPrefix String @default("ITM")
+  inventoryItemStartNumber Int @default(1)
+  nextInventoryItemNumber Int @default(1)
+  updatedAt       DateTime @updatedAt
+}
+
+// ============ CHART OF ACCOUNTS ============
+// Akun / Perkiraan. Type mengikuti standar akuntansi:
+// ASSET (Harta), LIABILITY (Kewajiban), EQUITY (Ekuitas),
+// REVENUE (Pendapatan), EXPENSE (Beban)
+model Account {
+  id          String   @id @default(cuid())
+  code        String   @unique // contoh: "1-1000"
+  name        String
+  type        String   // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  subtype     String?  // Cash, Bank, Account Receivable, dll.
+  parentCode  String?  // untuk grouping hirarkis
+  isGroup     Boolean  @default(false) // akun header (tidak bisa dijurnal langsung)
+  isActive    Boolean  @default(true)
+  description String?
+  // Urutan tampilan manual (ala Manager.io reorder). Default 0 = urut kode.
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lines       JournalLine[]
+
+  @@index([type])
+  @@index([parentCode])
+  @@index([sortOrder])
+}
+
+// ============ JOURNAL ============
+// Jurnal Umum. Satu JournalEntry punya banyak JournalLine (debit & credit).
+// Aturan akuntansi: total debit harus sama dengan total credit (balanced).
+model JournalEntry {
+  id          String   @id @default(cuid())
+  entryNumber String   @unique // contoh: "JE-0001"
+  date        DateTime
+  description String
+  reference   String?  // nomor bukti / referensi dokumen
+  source      String   @default("MANUAL") // MANUAL | CSV | SALES_INVOICE | PURCHASE_INVOICE | OPENING
+  sourceId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lines       JournalLine[]
+
+  @@index([date])
+  @@index([source])
+}
+
+// Baris jurnal. Setiap baris punya satu akun, debit ATAU credit (salah satu > 0).
+// bankAccountId: tautan ke rekening kas/bank (hanya baris yang memengaruhi saldo
+// rekening). Memungkinkan saldo dihitung per rekening, bukan per akun CoA gabungan.
+model JournalLine {
+  id            String      @id @default(cuid())
+  entryId       String
+  entry         JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       Account     @relation(fields: [accountId], references: [id])
+  bankAccountId String?
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  debit         Float       @default(0)
+  credit        Float       @default(0)
+  description   String?
+
+  @@index([accountId])
+  @@index([entryId])
+  @@index([bankAccountId])
+}
+
+// ============ CONTACTS (Customers / Suppliers) ============
+model Contact {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  type      String   // CUSTOMER | SUPPLIER | BOTH
+  email     String?
+  phone     String?
+  address   String?
+  taxId     String?
+  // Termin pembayaran (hari) yang diberikan kontak, mis. pemasok beri 30 hari.
+  // Dipakai menghitung jatuh tempo faktur (date + termin), fallback pengaturan perusahaan.
+  paymentTermsDays Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices  Invoice[]
+  receipts  Receipt[]
+  payments  Payment[]
+}
+
+// ============ INVOICES (Sales / Purchase) ============
+model Invoice {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  type      String   // SALES | PURCHASE
+  // Jenis dokumen: QUOTE (penawaran) | ORDER (pesanan) | INVOICE (faktur)
+  // Hanya INVOICE yang auto-post jurnal akuntansi.
+  documentType String @default("INVOICE")
+  // Untuk melacak dokumen asal saat "Salin ke" (QUOTE → ORDER → INVOICE)
+  parentInvoiceId String?
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id])
+  date      DateTime
+  dueDate   DateTime?
+  status    String   @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  notes     String?
+  subtotal  Float    @default(0)
+  discount  Float    @default(0) // potongan total sebelum PPN
+  taxRate   Float    @default(0) // persen PPN, mis. 11
+  taxAmount Float    @default(0)
+  withholdingRate Float @default(0) // persen Potongan Pajak Penghasilan (PPh), utk pembelian
+  total     Float    @default(0)
+  paidAmount Float   @default(0)
+  footnote  String?  // catatan kaki dokumen (Manager.io Footnote)
+  customTitle String? // judul kustom dokumen (Manager.io Custom Title)
+  showLineNumber Boolean @default(false) // tampilkan kolom nomor baris
+  showDescription Boolean @default(true) // tampilkan deskripsi/keterangan pada dokumen
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines     InvoiceLine[]
+
+  @@index([type])
+  @@index([documentType])
+  @@index([status])
+  @@index([contactId])
+}
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float    @default(1)
+  unit        String   @default("pcs") // satuan: pcs, kg, box, rim, dus, dll.
+  unitPrice   Float    @default(0)
+  amount      Float    @default(0)
+  // link opsional ke kode akun pendapatan/beban spesifik (tanpa relasi DB)
+  accountCode String?
+  // link ke inventory item jika baris ini menjual/membeli barang
+  itemId      String?
+
+  @@index([invoiceId])
+}
+
+// ============ BANK ACCOUNTS (Kas & Bank) ============
+// Mirip Manager.io: tiap rekening bank/kas adalah entitas terpisah
+// dengan nomor rekening, nama bank, dan saldo (dijaga lewat jurnal).
+model BankAccount {
+  id            String   @id @default(cuid())
+  code          String   @unique // contoh: "BANK-BCA"
+  name          String
+  bankName      String?  // BCA, Mandiri, BRI, dll.
+  accountNumber String?
+  accountHolder String?
+  branch        String?
+  type          String   @default("BANK") // CASH | BANK
+  currency      String   @default("IDR")
+  // Kode akun di Chart of Accounts yang menampung saldo akun bank ini
+  accountCode   String   // relasi longgar ke Account.code
+  isActive      Boolean  @default(true)
+  openingBalance Float   @default(0)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  receipts      Receipt[]
+  payments      Payment[]
+  transfersFrom Transfer[] @relation("TransferFrom")
+  transfersTo   Transfer[] @relation("TransferTo")
+  journalLines  JournalLine[]
+
+  @@index([type])
+}
+
+// ============ EMPLOYEES (Pegawai) ============
+// Karyawan dengan gaji & payroll. Penggajian otomatis membuat jurnal:
+// Debit Beban Gaji, Kredit Kas/Bank + Hutang Pajak (jika ada).
+model Employee {
+  id            String   @id @default(cuid())
+  code          String   @unique // contoh: "EMP-001"
+  name          String
+  position      String?  // Jabatan
+  department    String?
+  email         String?
+  phone         String?
+  address       String?
+  taxId         String?  // NPWP
+  joinDate      DateTime?
+  status        String   @default("ACTIVE") // ACTIVE | RESIGNED | ON_LEAVE
+  // Komponen gaji
+  basicSalary   Float    @default(0)
+  allowance     Float    @default(0) // tunjangan
+  bpjsRate      Float    @default(0) // persen potongan BPJS
+  taxRate       Float    @default(0) // persen PPh21
+  bankAccountId String?  // untuk transfer gaji
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  payroll       PayrollEntry[]
+  leaves        EmployeeLeave[]
+  reimbursements EmployeeReimbursement[]
+  loans          EmployeeLoan[]
+
+  @@index([status])
+  @@index([department])
+}
+
+// Catatan penggajian per periode. Setiap entri auto-post jurnal:
+// Debit 5-1100 (Beban Gaji) sebesar gross
+// Kredit 1-1200/1-1100 (Kas/Bank) sebesar net (take-home)
+// Kredit 2-1200 (Hutang Pajak) sebesar tax deducted
+model PayrollEntry {
+  id           String   @id @default(cuid())
+  number       String   @unique // contoh: "PAY-001"
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payPeriod    DateTime // bulan/tahun penggajian
+  payDate      DateTime
+  basicSalary  Float    @default(0)
+  allowance    Float    @default(0)
+  grossPay     Float    @default(0)
+  taxDeduction Float    @default(0)
+  bpjsDeduction Float   @default(0)
+otherDeduction Float   @default(0)
+  totalDeduction Float   @default(0)
+  netPay       Float    @default(0)
+  bpjsEmployer Float    @default(0) // iuran BPJS pemberi kerja (beban tambahan)
+  status       String   @default("PAID") // DRAFT | PAID
+  journalEntryId String? // link ke JournalEntry yang dibuat otomatis
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([payPeriod])
+}
+
+// ============ EMPLOYEE LEAVE (Cuti & Izin) ============
+// Manajemen cuti & izin pegawai (non-akuntansi, manajemen SDM).
+// Mirip Manager.io: catat jenis cuti/izin, rentang tanggal, jumlah hari, dan status approval.
+model EmployeeLeave {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type        String   // CUTI | IZIN | SAKIT
+  // Kategori spesifik utk CUTI: TAHUNAN, BERSAMA, KHUSUS, DLL.
+  // Kategori utk IZIN: KEPERLUAN, KELUARGA, DLL. Utk SAKIT: rawat inap/jalan.
+  category    String?
+  startDate   DateTime
+  endDate     DateTime
+  days        Int      @default(1)
+  reason      String?
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  // Cuti tahunan terpakai utk CUTI yang disetujui (konsumsi kuota 12 hari/tahun)
+  attachmentName String? // nama file dokumen pendukung (surat sakit, dll)
+  attachmentUrl  String? // URL file yang diupload ke /uploads/...
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([type])
+  @@index([status])
+}
+
+// ============ EMPLOYEE REIMBURSEMENT (Reimburse) ============
+// Klaim penggantian biaya pegawai (transport, kesehatan, dll).
+// Auto-post journal saat status menjadi PAID:
+//   Debit beban (accountCode), Kredit Kas/Bank (bankAccountId->accountCode)
+model EmployeeReimbursement {
+  id            String   @id @default(cuid())
+  number        String   @unique // contoh: "RMB-001"
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date          DateTime
+  category      String?  // TRANSPORT | KESEHATAN | ATK | AKOMODASI | LAINNYA
+  description   String?
+  amount        Float    @default(0)
+  accountCode   String   @default("5-1700") // akun beban (Beban Administrasi & Umum)
+  bankAccountId String?  // akun kas/bank utk pembayaran
+  status        String   @default("PENDING") // PENDING | APPROVED | PAID | REJECTED
+  reference     String?
+  journalEntryId String? // link ke jurnal saat PAID
+  attachmentName String? // nama file bukti (struk, kwitansi, dll)
+  attachmentUrl  String? // URL file yang diupload ke /uploads/...
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+// ============ EMPLOYEE LOAN (Hutang Karyawan) ============
+// Pinjaman/kasbon yang diberikan ke pegawai. Hutang pegawai ke perusahaan.
+// Auto-post journal saat pinjaman diberikan:
+//   Debit Piutang Karyawan (1-1700), Kredit Kas/Bank (bankAccountId->accountCode)
+// Pembayaran cicilan => kredit Piutang / debit Kas
+model EmployeeLoan {
+  id            String   @id @default(cuid())
+  number        String   @unique // contoh: "LN-001"
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date          DateTime
+  amount        Float    @default(0) // jumlah pinjaman
+  paidAmount    Float    @default(0) // sudah dibayar (cicilan)
+  installmentAmount Float @default(0) // nominal cicilan per bulan (opsional)
+  accountCode   String   @default("1-1700") // akun piutang karyawan
+  bankAccountId String?  // akun kas/bank sumber dana
+  description   String?
+  interestRate  Float    @default(0) // bunga % per tahun (opsional)
+  status        String   @default("ACTIVE") // ACTIVE | PAID | CANCELLED
+  journalEntryId String? // link ke jurnal saat pinjaman diberikan
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+// ============ INVENTORY ITEMS (Persediaan Barang) ============
+// Barang/jasa dengan stok. Pembelian menambah stok & debit Persediaan,
+// penjualan mengurangi stok & kredit Persediaan (HPP).
+model InventoryItem {
+  id            String   @id @default(cuid())
+  code          String   @unique // SKU
+  name          String
+  description   String?
+  category      String?
+  unit          String   @default("pcs") // pcs, kg, box, dll.
+  // Harga & nilai
+  purchasePrice Float    @default(0) // harga beli
+  salePrice     Float    @default(0) // harga jual
+  // Stok
+  quantityOnHand Float   @default(0)
+  reorderLevel  Float    @default(0)
+  // Akun akuntansi (kode, relasi longgar)
+  inventoryAccountCode String? // aset persediaan, default 1-1400
+  salesAccountCode     String? // pendapatan penjualan, default 4-1000
+  cogsAccountCode      String? // HPP, default 5-2000
+  // Manager.io: divisi penjualan default & sembunyikan nama item di dokumen cetak
+  division             String?
+  hideNameOnDocuments  Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  movements     InventoryMovement[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+// Pergerakan stok: IN (pembelian/penerimaan) atau OUT (penjualan/pengeluaran)
+// Setiap movement bisa terlink ke journal entry (auto-post).
+model InventoryMovement {
+  id           String   @id @default(cuid())
+  itemId       String
+  item         InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  date         DateTime
+  type         String   // IN | OUT | ADJUST
+  quantity     Float    @default(0)
+  unitPrice    Float    @default(0)
+  totalValue   Float    @default(0)
+  reference    String?  // nomor bukti
+  description  String?
+  // Link ke journal entry yang auto-created (kosong = manual adjustment)
+  journalEntryId String?
+  createdAt    DateTime @default(now())
+
+  @@index([itemId])
+  @@index([type])
+  @@index([date])
+}
+
+// ============ RECEIPTS (Penerimaan Kas/Bank) ============
+// Uang masuk dari pelanggan atau sumber lain. Mirip Manager.io "Receipts".
+// Auto-post journal: Debit Kas/Bank, Kredit Akun Lawan (Piutang/Pendapatan/dll).
+model Receipt {
+  id            String   @id @default(cuid())
+  number        String   @unique // contoh: "RCV-001"
+  date          DateTime
+  amount        Float    @default(0)
+  // Sumber penerimaan
+  fromContactId String?  // dari kontak (pelanggan) - opsional
+  contact       Contact? @relation(fields: [fromContactId], references: [id])
+  // Akun kas/bank yang menerima uang
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  // Akun lawan (sumber penerimaan): default 1-1300 (Piutang) untuk pelanggan
+  accountCode   String   // kode akun CoA
+  description   String?
+  reference     String?
+  // Auto-alokasi ke invoice (jika dari pelanggan yang punya invoice outstanding)
+  allocateToInvoiceId String?
+  // Ringkasan baris item (derivasi dari ReceiptLine)
+  subtotal  Float    @default(0)
+  discount  Float    @default(0)
+  taxAmount Float    @default(0)
+  // Opsi dokumen ala Manager.io
+  footnote  String?
+  customTitle String?
+  customTheme Boolean @default(false)
+  themeColor   String @default("#047857")
+  amountExcludesTax Boolean @default(true)
+  fixedAmount  Boolean @default(false)
+  // Opsi kolom ala Manager.io
+  showLineNumber Boolean @default(false)
+  showDescription Boolean @default(true)
+  showQuantity    Boolean @default(true)
+  showDiscount    Boolean @default(false)
+  showTaxColumn   Boolean @default(true)
+  // Link ke jurnal yang auto-created
+  journalEntryId String?
+  source        String   @default("RECEIPT") // RECEIPT | OPENING
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines         ReceiptLine[]
+
+  @@index([date])
+  @@index([fromContactId])
+  @@index([bankAccountId])
+}
+
+// Baris item penerimaan ala Manager.io: satu baris = nilai yang dikredit
+// ke akun lawan (akunCoA), bisa terhubung ke item persediaan, plus pajak.
+model ReceiptLine {
+  id          String   @id @default(cuid())
+  receiptId   String
+  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  // Link ke item persediaan (opsional), relasi longgar supaya baris kustom tetap bisa
+  itemId      String?
+  // Akun CoA tujuan baris (kredit); wajib diisi oleh klien (default akun penerimaan)
+  accountCode String
+  description String
+  quantity    Float    @default(1)
+  unit        String   @default("pcs")
+  discount    Float    @default(0) // persen diskon baris (0-100)
+  unitPrice   Float    @default(0)
+  amount      Float    @default(0) // net baris = kuantitas × harga − diskon
+  // Pajak per baris ("kode pajak", snapshot tarif saat transaksi)
+  taxCode     String?
+  taxRate     Float    @default(0) // persen pajak saat transaksi
+  taxAmount   Float    @default(0) // nilai pajak baris
+
+  @@index([receiptId])
+}
+
+// ============ PAYMENTS (Pembayaran Kas/Bank) ============
+// Uang keluar ke pemasok atau tujuan lain. Mirip Manager.io "Payments".
+// Auto-post journal: Kredit Kas/Bank, Debit Akun Lawan (Hutang/Beban/dll).
+// Sejak versi multi-baris (ala Manager.io), seluruh jumlah diderivasi dari
+// PaymentLine: subtotal, diskon, pajak adalah ringkasan baris.
+model Payment {
+  id            String   @id @default(cuid())
+  number        String   @unique // contoh: "PMT-001"
+  date          DateTime
+  amount        Float    @default(0) // total kas yang keluar (= ringkasan baris)
+  // Tujuan pembayaran
+  toContactId   String?  // ke kontak (pemasok) - opsional
+  contact       Contact? @relation(fields: [toContactId], references: [id])
+  // Akun kas/bank yang mengeluarkan uang
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  // Akun lawan default (tujuan pembayaran) bila baris tanpa akun: 2-1100 (Hutang) untuk pemasok
+  accountCode   String   // kode akun CoA default
+  description   String?
+  reference     String?
+  // Auto-alokasi ke invoice pembelian (jika ke pemasok)
+  allocateToInvoiceId String?
+  // Ringkasan baris item (derivasi dari PaymentLine)
+  subtotal  Float    @default(0) // Σ (kuantitas × harga) garis
+  discount  Float    @default(0) // Σ potongan garis (Rp)
+  taxAmount Float    @default(0) // Σ pajak garis
+  // Opsi dokumen ala Manager.io
+  footnote  String?  // catatan kaki dokumen
+  customTitle String? // judul kustom dokumen
+  customTheme Boolean @default(false) // hidupkan tema kustom (warna aksen)
+  themeColor   String @default("#047857") // warna aksen tema kustom
+  amountExcludesTax Boolean @default(true) // jumlah belum termasuk PPN (tarif menambah total)
+  fixedAmount  Boolean @default(false) // jumlah tetap: total diisi manual, baris disetarakan
+  // Opsi kolom ala Manager.io
+  showLineNumber Boolean @default(false) // kolom "Nomor baris"
+  showDescription Boolean @default(true) // kolom "Deskripsi"
+  showQuantity    Boolean @default(true) // kolom "Kuantitas"
+  showDiscount    Boolean @default(false) // kolom "Diskon"
+  showTaxColumn   Boolean @default(true) // kolom "Jumlah Pajak"
+  // Link ke jurnal yang auto-created
+  journalEntryId String?
+  source        String   @default("PAYMENT") // PAYMENT | OPENING
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines         PaymentLine[]
+
+  @@index([date])
+  @@index([toContactId])
+  @@index([bankAccountId])
+}
+
+// Baris item pembayaran ala Manager.io: satu baris = nilai yang didebit
+// ke akun lawan (akunCoA), bisa terhubung ke item persediaan, plus pajak.
+model PaymentLine {
+  id          String   @id @default(cuid())
+  paymentId   String
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  // Link ke item persediaan (opsional), relasi longgar supaya baris kustom tetap bisa
+  itemId      String?
+  // Akun CoA tujuan baris (debit); wajib diisi oleh klien (default akun pembayaran)
+  accountCode String
+  description String
+  quantity    Float    @default(1)
+  unit        String   @default("pcs")
+  discount    Float    @default(0) // persen diskon baris (0-100)
+  unitPrice   Float    @default(0)
+  amount      Float    @default(0) // net baris = kuantitas × harga − diskon
+  // Pajak per baris ("kode pajak", snapshot tarif saat transaksi)
+  taxCode     String?
+  taxRate     Float    @default(0) // persen pajak saat transaksi
+  taxAmount   Float    @default(0) // nilai pajak baris
+
+  @@index([paymentId])
+}
+
+// ============ TRANSFERS (Transfer Antar Akun) ============
+// Memindahkan dana antar akun kas/bank. Mirip Manager.io "Transfer".
+// Auto-post journal: Debit akun bank tujuan, Kredit akun bank sumber.
+model Transfer {
+  id               String   @id @default(cuid())
+  number           String   @unique // contoh: "TRF-001"
+  date             DateTime
+  amount           Float    @default(0)
+  fromBankAccountId String
+  fromBankAccount  BankAccount @relation("TransferFrom", fields: [fromBankAccountId], references: [id])
+  toBankAccountId   String
+  toBankAccount    BankAccount @relation("TransferTo", fields: [toBankAccountId], references: [id])
+  description      String?
+  reference        String?
+  journalEntryId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+  @@index([fromBankAccountId])
+  @@index([toBankAccountId])
+}
+
+// ============ TAX RULES (Pusat Pajak) ============
+// Berisi seluruh jenis pajak/potongan yang berlaku di Indonesia.
+// Tarif bisa flat (rate) atau progresif (brackets - JSON string).
+model TaxRule {
+  id          String   @id @default(cuid())
+  code        String   @unique // mis. "PPN", "PPH21", "PPH23", "PPH42", "PPH22", "PPH26", "UMKM", "PPHBADAN", "PBB", "BPJS"
+  name        String   // Nama pajak, mis. "Pajak Pertambahan Nilai (PPN)"
+  description String?
+  category    String   // PPN | PPH21 | PPH23 | PPH42 | PPH22 | PPH26 | UMKM | PPHBADAN | PBB | BPJS | OTHER
+  rate        Float    @default(0) // tarif flat (persen) - dipakai bila brackets kosong
+  // Tarif progresif sebagai JSON: [[batasBawah, batasAtas|null, persen], ...]
+  brackets    String?
+  appliesTo   String   @default("BOTH") // SALES | PURCHASE | PAYROLL | BOTH
+  accountCode String   @default("2-1200") // akun CoA utk hutang pajak
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false) // bawaan sistem, tidak bisa dihapus
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============ FIXED ASSETS (Aset Tetap) ============
+// Register aset tetap ala Manager.io: mencatat harga perolehan, umur ekonomis,
+// penyusutan otomatis (straight-line), dan disposisi (penjualan/penghapusan).
+// Auto-post jurnal:
+//   Pembelian  : Debit akun aset, Kredit Kas/Bank
+//   Penyusutan : Debit Beban Penyusutan (5-3000), Kredit Akumulasi Penyusutan (1-2900)
+//   Disposisi  : Debit Kas (hasil jual) + Akumulasi, Kredit Aset, selisih → laba/rugi
+model FixedAsset {
+  id            String   @id @default(cuid())
+  code          String   @unique // contoh: "FA-001"
+  name          String
+  description   String?
+  category      String?  // Peralatan | Kendaraan | Bangunan | Mesin | Komputer | Lainnya
+  // Akun akuntansi (kode, relasi longgar ke CoA)
+  assetAccountCode      String @default("1-2100") // akun aset (debit saat pembelian)
+  accumulatedAccountCode String @default("1-2900") // akumulasi penyusutan (kredit)
+  expenseAccountCode     String @default("5-3000") // beban penyusutan (debit)
+  // Data nilai aset
+  purchaseDate  DateTime
+  purchasePrice Float    @default(0) // harga perolehan
+  residualValue Float    @default(0) // nilai sisa (residual)
+  usefulLifeMonths Int   @default(60) // umur ekonomis (bulan)
+  depreciationMethod String @default("STRAIGHT_LINE") // STRAIGHT_LINE
+  // Bank/cash account utk pembelian
+  bankAccountId String?
+  // Status
+  isDisposed    Boolean  @default(false)
+  disposalDate  DateTime?
+  disposalPrice Float    @default(0)
+  // Link ke jurnal pembelian yang auto-created
+  journalEntryId String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  depreciations FixedAssetDepreciation[]
+
+  @@index([category])
+  @@index([isDisposed])
+}
+
+// Riwayat penyusutan per periode. Setiap baris = 1 jurnal penyusutan.
+model FixedAssetDepreciation {
+  id              String   @id @default(cuid())
+  assetId         String
+  asset           FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  period          String   // "YYYY-MM" periode penyusutan
+  date            DateTime
+  expense         Float    @default(0) // beban penyusutan periode ini
+  accumulated     Float    @default(0) // akumulasi berjalan setelah periode ini
+  journalEntryId  String?  // link ke jurnal yang auto-created
+  createdAt       DateTime @default(now())
+
+  @@index([assetId])
+  @@index([period])
+}
+

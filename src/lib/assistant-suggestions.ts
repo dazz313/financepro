@@ -1,0 +1,16 @@
+export const VIEW_SUGGESTIONS: Record<string, string[]> = {
+  dashboard: ["Analisis KPI bulan ini", "Bagaimana cara improve profit margin?", "Apa rasio likuiditas saya?"],
+  accounts: ["Bagaimana cara membuat akun baru?", "Jelaskan tipe-tipe akun", "Apa itu akun grup?"],
+  journal: ["Cara membuat jurnal manual?", "Apa itu jurnal berpasangan?", "Kenapa jurnal harus balanced?"],
+  "bank-accounts": ["Cara transfer antar bank?", "Bagaimana reconcile bank?", "Cara catat penerimaan?"],
+  invoices: ["Perbedaan Penawaran, Pesanan, Faktur?", "Cara convert Penawaran ke Faktur?", "Cara print faktur?"],
+  contacts: ["Cara menambah pelanggan baru?", "Apa perbedaan pelanggan & pemasok?"],
+  employees: ["Cara jalankan payroll?", "Cara catat cuti karyawan?", "Bagaimana work reimburse?"],
+  inventory: ["Cara tambah item baru?", "Bagaimana stok otomatis berkurang?", "Apa itu HPP?"],
+  receipts: ["Cara catat penerimaan dari pelanggan?", "Cara alokasikan ke faktur?"],
+  payments: ["Cara catat pembayaran ke supplier?", "Cara allocate ke faktur beli?"],
+  reports: ["Bagaimana cara baca Neraca?", "Apa perbedaan Neraca & Laba Rugi?", "Cara generate laporan bulanan?"],
+  settings: ["Cara ganti profil perusahaan?", "Cara set pajak default?", "Cara backup data?"],
+  tax: ["Bagaimana cara hitung PPh 21?", "Apa itu tarif progresif?", "PPN berapa sekarang?"],
+  "fixed-assets": ["Bagaimana cara penyusutan aset?", "Cara disposisi aset?", "Apa itu straight-line?"],
+};
