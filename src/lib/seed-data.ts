@@ -33,7 +33,8 @@ export const DEFAULT_CHART_OF_ACCOUNTS: SeedAccount[] = [
   { code: "2", name: "KEWAJIBAN", type: "LIABILITY", isGroup: true },
   { code: "2-1000", name: "Kewajiban Jangka Pendek", type: "LIABILITY", subtype: "Current Liability", parentCode: "2", isGroup: true },
   { code: "2-1100", name: "Hutang Usaha", type: "LIABILITY", subtype: "Account Payable", parentCode: "2-1000", isGroup: false },
-  { code: "2-1200", name: "Hutang Pajak", type: "LIABILITY", subtype: "Tax Payable", parentCode: "2-1000", isGroup: false },
+  { code: "2-1200", name: "Hutang PPN", type: "LIABILITY", subtype: "VAT Payable", parentCode: "2-1000", isGroup: false },
+  { code: "2-1210", name: "Hutang PPh 23", type: "LIABILITY", subtype: "Income Tax Payable", parentCode: "2-1000", isGroup: false },
   { code: "2-1300", name: "Pendapatan Diterima Di Muka", type: "LIABILITY", subtype: "Unearned Revenue", parentCode: "2-1000", isGroup: false },
   { code: "2-1400", name: "Hutang Bank Jangka Pendek", type: "LIABILITY", subtype: "Short Term Loan", parentCode: "2-1000", isGroup: false },
   { code: "2-1500", name: "Hutang BPJS", type: "LIABILITY", subtype: "Accrued Liability", parentCode: "2-1000", isGroup: false },
@@ -53,7 +54,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: SeedAccount[] = [
   { code: "4-1100", name: "Pendapatan Jasa", type: "REVENUE", subtype: "Service Revenue", parentCode: "4", isGroup: false },
   { code: "4-2000", name: "Pendapatan Lain-lain", type: "REVENUE", subtype: "Other Revenue", parentCode: "4", isGroup: false },
   { code: "4-2200", name: "Pendapatan Bunga", type: "REVENUE", subtype: "Interest Revenue", parentCode: "4", isGroup: false },
-  { code: "4-2100", name: "Potongan Pembelian", type: "REVENUE", subtype: "Purchase Discount", parentCode: "4", isGroup: false },
+  { code: "4-2100", name: "Potongan Penjualan", type: "REVENUE", subtype: "Sales Discount", parentCode: "4", isGroup: false },
 
   // ============ BEBAN (5) ============
   { code: "5", name: "BEBAN", type: "EXPENSE", isGroup: true },
@@ -66,6 +67,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: SeedAccount[] = [
   { code: "5-1600", name: "Beban Transportasi", type: "EXPENSE", subtype: "Transport Expense", parentCode: "5-1000", isGroup: false },
   { code: "5-1700", name: "Beban Administrasi & Umum", type: "EXPENSE", subtype: "Admin Expense", parentCode: "5-1000", isGroup: false },
   { code: "5-2000", name: "Harga Pokok Penjualan", type: "EXPENSE", subtype: "COGS", parentCode: "5", isGroup: false },
+  { code: "5-2010", name: "Potongan Pembelian", type: "EXPENSE", subtype: "Purchase Discount", parentCode: "5", isGroup: false },
   { code: "5-3000", name: "Beban Penyusutan", type: "EXPENSE", subtype: "Depreciation Expense", parentCode: "5", isGroup: false },
   { code: "5-4000", name: "Beban Pajak", type: "EXPENSE", subtype: "Tax Expense", parentCode: "5", isGroup: false },
 ];

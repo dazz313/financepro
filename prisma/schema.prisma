@@ -186,8 +186,10 @@ model JournalEntry {
   date        DateTime
   description String
   reference   String?  // nomor bukti / referensi dokumen
-  source      String   @default("MANUAL") // MANUAL | CSV | SALES_INVOICE | PURCHASE_INVOICE | OPENING
+  source      String   @default("MANUAL") // MANUAL | CSV | SALES_INVOICE | PURCHASE_INVOICE | OPENING | REVERSAL
   sourceId    String?
+  isReversed  Boolean  @default(false) // true jika sudah di-reversal
+  createdBy   String?  // userId yang membuat jurnal
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

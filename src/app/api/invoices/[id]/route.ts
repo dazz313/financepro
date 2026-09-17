@@ -298,7 +298,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                       { accountId: accAr!, debit: 0, credit: remaining },
                     ]
                   : [
-                      { accountId: accAp!, debit: 0, credit: remaining },
+                      { accountId: accAp!, debit: remaining, credit: 0 },
                       { accountId: accBank, debit: 0, credit: remaining, bankAccountId, description: `Pembayaran ke ${invoice.contact.name}` },
                     ],
               },

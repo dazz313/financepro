@@ -23,9 +23,12 @@ export async function getAccountBalances(untilDate?: Date) {
     orderBy: { code: "asc" },
     include: {
       lines: {
-        where: untilDate
-          ? { entry: { date: { lte: untilDate } } }
-          : undefined,
+        where: {
+          entry: {
+            isReversed: false,
+            ...(untilDate ? { date: { lte: untilDate } } : {}),
+          },
+        },
         select: { debit: true, credit: true },
       },
     },
@@ -185,6 +188,7 @@ export async function buildCashFlow(fromDate?: Date, toDate?: Date) {
       AND: [
         fromDate ? { date: { gte: fromDate } } : {},
         toDate ? { date: { lte: toDate } } : {},
+        { isReversed: false },
         { lines: { some: { accountId: { in: cashAccounts.map((a) => a.id) } } } },
       ],
     },
@@ -299,7 +303,7 @@ export async function buildDashboardKPIs() {
   const trendLines = await db.journalLine.findMany({
     where: {
       AND: [
-        { entry: { date: { gte: sixMonthsAgo } } },
+        { entry: { date: { gte: sixMonthsAgo }, isReversed: false } },
         { OR: [{ accountId: { in: [...revIds] } }, { accountId: { in: [...expIds] } }] },
       ],
     },
@@ -341,6 +345,7 @@ export async function buildDashboardKPIs() {
   const recentEntries = await db.journalEntry.findMany({
     take: 8,
     orderBy: { date: "desc" },
+    where: { isReversed: false },
     include: { lines: { include: { account: true } } },
   });
   const recentTransactions = recentEntries.map((e) => {

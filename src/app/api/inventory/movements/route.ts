@@ -79,11 +79,23 @@ export async function POST(req: NextRequest) {
         newQty = item.quantityOnHand - qty;
         if (newQty < 0) throw new Error(`Stok ${item.name} tidak cukup (tersedia ${item.quantityOnHand} ${item.unit})`);
       } else {
-        // ADJUST: penyesuaian, Debit/Kredit Persediaan vs selisih
-        journalLines = [
-          { accountId: invAcc, debit: totalValue, credit: 0, description: `Penyesuaian ${item.name}` },
-          { accountId: codeMap.get("3-3000") ?? cashAccId, debit: 0, credit: totalValue, description: `Penyesuaian ${item.name}` },
-        ];
+        // ADJUST: penyesuaian stok —gunakan HPP (COGS) sebagai akun lawan, bukan ekuitas
+        // IAS 2: penyesuaian persediaan dikenakan ke beban, bukan laba ditahan
+        if (!cogsAcc) throw new Error("Akun HPP belum dikonfigurasi");
+        if (totalValue >= 0) {
+          // Stok naik: Dr Persediaan, Cr HPP (mengurangi beban)
+          journalLines = [
+            { accountId: invAcc, debit: totalValue, credit: 0, description: `Penyesuaian ${item.name}` },
+            { accountId: cogsAcc, debit: 0, credit: totalValue, description: `Penyesuaian ${item.name}` },
+          ];
+        } else {
+          // Stok turun: Dr HPP, Cr Persediaan (menambah beban)
+          const absValue = Math.abs(totalValue);
+          journalLines = [
+            { accountId: cogsAcc, debit: absValue, credit: 0, description: `Penyesuaian ${item.name}` },
+            { accountId: invAcc, debit: 0, credit: absValue, description: `Penyesuaian ${item.name}` },
+          ];
+        }
         newQty = item.quantityOnHand + qty;
       }
 
