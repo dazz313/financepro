@@ -5,13 +5,16 @@ import { db } from "@/lib/db";
 
 const DEV_FALLBACK_SECRET = "financepro-dev-secret-key-change-in-production-2026";
 
+let _secret: Uint8Array | null = null;
+
 export function getAuthSecret(): Uint8Array {
+  if (_secret) return _secret;
   const env = process.env.NEXTAUTH_SECRET;
   if (env && env.trim().length >= 16) {
-    return new TextEncoder().encode(env.trim());
+    _secret = new TextEncoder().encode(env.trim());
+    return _secret;
   }
   if (process.env.NODE_ENV === "production") {
-    // Fail-closed: tanpa secret yang kuat, produksi menolak membuat/verifikasi token.
     throw new Error(
       "NEXTAUTH_SECRET belum diset. Wajib set NEXTAUTH_SECRET (min. 16 karakter) sebelum deploy."
     );
@@ -19,10 +22,10 @@ export function getAuthSecret(): Uint8Array {
   console.warn(
     "[auth] NEXTAUTH_SECRET belum diset — memakai fallback DEV-only. Jangan deploy tanpa secret nyata."
   );
-  return new TextEncoder().encode(DEV_FALLBACK_SECRET);
+  _secret = new TextEncoder().encode(DEV_FALLBACK_SECRET);
+  return _secret;
 }
 
-const SECRET = getAuthSecret();
 const COOKIE_NAME = "financepro_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 hari (detik)
 // Hanya sertakan Secure di produksi (HTTP lokal/dev tetap berfungsi)
@@ -42,13 +45,13 @@ export async function createToken(user: AuthUser): Promise<string> {
     .setSubject(user.id)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
-    .sign(SECRET);
+    .sign(getAuthSecret());
 }
 
 // Verifikasi JWT token
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getAuthSecret());
     return payload as unknown as AuthUser;
   } catch {
     return null;

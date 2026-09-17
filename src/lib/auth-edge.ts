@@ -5,18 +5,21 @@ import { jwtVerify } from "jose";
 export const AUTH_COOKIE = "financepro_session";
 const DEV_FALLBACK_SECRET = "financepro-dev-secret-key-change-in-production-2026";
 
+let _secret: Uint8Array | null = null;
+
 function getSecret(): Uint8Array {
+  if (_secret) return _secret;
   const env = process.env.NEXTAUTH_SECRET;
   if (env && env.trim().length >= 16) {
-    return new TextEncoder().encode(env.trim());
+    _secret = new TextEncoder().encode(env.trim());
+    return _secret;
   }
   if (process.env.NODE_ENV === "production") {
     throw new Error("NEXTAUTH_SECRET belum diset (middleware).");
   }
-  return new TextEncoder().encode(DEV_FALLBACK_SECRET);
+  _secret = new TextEncoder().encode(DEV_FALLBACK_SECRET);
+  return _secret;
 }
-
-const SECRET = getSecret();
 
 export type EdgeAuthUser = {
   id: string;
@@ -27,7 +30,7 @@ export type EdgeAuthUser = {
 
 export async function verifyTokenEdge(token: string): Promise<EdgeAuthUser | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecret());
     return payload as unknown as EdgeAuthUser;
   } catch {
     return null;
