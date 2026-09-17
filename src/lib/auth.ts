@@ -26,7 +26,7 @@ const SECRET = getAuthSecret();
 const COOKIE_NAME = "financepro_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 hari (detik)
 // Hanya sertakan Secure di produksi (HTTP lokal/dev tetap berfungsi)
-const COOKIE_SECURE = process.env.NODE_ENV === "production" ? "; Secure" : "";
+const COOKIE_SECURE = process.env.NODE_ENV === "production" ? " Secure" : "";
 
 export type AuthUser = {
   id: string;
