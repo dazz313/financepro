@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { monthlyDepreciation, bookValue, toPeriod } from "@/lib/depreciation";
 import { nextCode, generateOrUseCode, CodeConflictError } from "@/lib/code-gen";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 // GET /api/fixed-assets - daftar aset tetap dengan nilai kalkulasi
 export async function GET(req: NextRequest) {
@@ -104,24 +105,18 @@ export async function POST(req: NextRequest) {
       let journalEntryId: string | undefined;
       if (price > 0) {
         const entryNumber = await nextCode(tx, "journal", { date: purchaseDate });
-        const lines: any[] = [
-          { accountId: assetAccId, debit: price, credit: 0, description: `Perolehan aset ${code}` },
-        ];
-        if (creditAccId) {
-          lines.push({ accountId: creditAccId, debit: 0, credit: price, bankAccountId, description: `Bayar aset ${code} dari ${bankAccount?.name}` });
-        } else {
-          throw new Error("Akun kas/bank terpilih tidak terhubung ke CoA yang valid");
-        }
-        const entry = await tx.journalEntry.create({
-          data: {
+        const entry = await createBalancedJournal(tx, {
             entryNumber,
             date: new Date(purchaseDate),
             description: `Pembelian aset ${name}`,
             reference: code,
             source: "FIXED_ASSET",
-            lines: { create: lines },
-          },
-        });
+            userId: user?.id,
+            lines: [
+              { accountId: assetAccId, debit: price, credit: 0, description: `Perolehan aset ${code}` },
+              ...(creditAccId ? [{ accountId: creditAccId, debit: 0, credit: price, bankAccountId, description: `Bayar aset ${code} dari ${bankAccount?.name}` }] : []),
+            ],
+          });
         journalEntryId = entry.id;
 
         // 1b. Catat pembayaran (Manager.io: uang keluar tampil di view Pembayaran)

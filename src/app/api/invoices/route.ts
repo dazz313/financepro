@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
+import { getUserFromRequest } from "@/lib/auth";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 import type { DocSeries } from "@/lib/codegen-shared";
 
 // Status turunan ala Manager.io (dihitung dari total vs paidAmount vs jatuh tempo)
@@ -99,6 +101,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/invoices - buat invoice + jurnal akuntansi otomatis
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
   try {
     const body = await req.json();
     let { number, type, contactId, date, dueDate, notes, taxRate, lines, documentType, parentInvoiceId, discount, withholdingRate, footnote, customTitle, showLineNumber, showDescription } = body;
@@ -338,17 +341,16 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const entry = await tx.journalEntry.create({
-          data: {
+        const entry = await createBalancedJournal(tx, {
             entryNumber,
             date: new Date(date),
             description: `${isSales ? "Penjualan" : "Pembelian"} - ${number} (${invoice.contact?.name ?? ""})`,
             reference: number,
             source: isSales ? "SALES_INVOICE" : "PURCHASE_INVOICE",
             sourceId: invoice.id,
-            lines: { create: journalLines },
-          },
-        });
+            userId: user?.id,
+            lines: [...journalLines],
+          });
         return { invoice, entry };
       }
 

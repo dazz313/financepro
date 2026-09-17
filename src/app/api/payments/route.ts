@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
 import { computePaymentLines, type PaymentLineInput } from "@/lib/payment-lines";
+import { getUserFromRequest } from "@/lib/auth";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 const DEFAULT_ACCOUNT = "2-1100"; // Hutang Usaha
 const DEFAULT_TAX_ACCOUNT = "2-1200"; // Utang Pajak
@@ -55,6 +57,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
   try {
     const body = await req.json();
     const {
@@ -171,15 +174,14 @@ export async function POST(req: NextRequest) {
 
     const result = await db.$transaction(async (tx) => {
       // 1. Journal entry (balanced: Debit Akun-Akun, Kredit Kas/Bank)
-      const entry = await tx.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(tx, {
           entryNumber,
           date: new Date(date),
           description: description || `Pembayaran ${number}${invoice ? ` (alokasi ${invoice.number})` : ""}`,
           reference: reference || number,
           source: "PAYMENT",
-          lines: {
-            create: [
+          userId: user?.id,
+          lines: [
               ...debitEntries.map((e) => ({
                 accountId: e.accountId,
                 debit: e.debit,
@@ -187,10 +189,8 @@ export async function POST(req: NextRequest) {
                 description: `Pembayaran ${number}`,
               })),
               { accountId: creditAcc, debit: 0, credit: total, bankAccountId, description: `Pembayaran dari ${bank.name}` },
-            ],
-          },
-        },
-      });
+          ],
+        });
 
       // 2. Payment record
       const payment = await tx.payment.create({

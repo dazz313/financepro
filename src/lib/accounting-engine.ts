@@ -8,6 +8,19 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
+/**
+ * Cek apakah tanggal jurnal masih diizinkan (belum ditutup).
+ */
+export async function validatePeriod(date: Date): Promise<void> {
+  const settings = await db.companySettings.findUnique({ where: { id: "default" } });
+  if (settings?.periodLockedUntil && date < settings.periodLockedUntil) {
+    const locked = settings.periodLockedUntil.toLocaleDateString("id-ID");
+    throw new Error(
+      `Periode sudah ditutup per ${locked}. Jurnal tidak boleh tanggal sebelum ${locked}.`
+    );
+  }
+}
+
 export type JournalLineInput = {
   accountId: string;
   debit: number;
@@ -39,7 +52,10 @@ export async function createBalancedJournal(
   tx: Prisma.TransactionClient,
   input: CreateJournalInput
 ) {
-  // 1. Validate lines exist
+  // 1. Validate period not locked
+  await validatePeriod(input.date);
+
+  // 2. Validate lines exist
   if (!input.lines || input.lines.length < 2) {
     throw new Error("Jurnal minimal harus memiliki 2 baris (double-entry)");
   }

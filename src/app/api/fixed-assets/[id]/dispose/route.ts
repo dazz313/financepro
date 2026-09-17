@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { nextCode } from "@/lib/code-gen";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -112,16 +113,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         }
       }
 
-      const entry = await tx.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(tx, {
           entryNumber,
           date,
           description: `Disposisi aset ${asset.code} - ${asset.name}`,
           reference: `DISPOSAL-${asset.code}`,
           source: "FIXED_ASSET_DISPOSAL",
-          lines: { create: lines },
-        },
-      });
+          userId: user?.id,
+          lines: [...lines],
+        });
 
       const updated = await tx.fixedAsset.update({
         where: { id: asset.id },

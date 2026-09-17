@@ -79,6 +79,7 @@ model CompanySettings {
   locale          String   @default("id-ID")
   fiscalYearStartMonth Int @default(1) // 1-12 (Jan=1)
   fiscalYearStartDay   Int @default(1)
+  periodLockedUntil DateTime? // Tanggal terakhir periode ditutup — jurnal tidak boleh sebelum ini
   defaultTaxRate  Float    @default(11) // PPN default persen
   taxIncluded     Boolean  @default(false) // harga sudah termasuk pajak
   ppnEnabled      Boolean  @default(true) // aktif/nonaktif PPN (disable = faktur tanpa PPN)

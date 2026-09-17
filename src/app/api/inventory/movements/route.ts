@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
+import { getUserFromRequest } from "@/lib/auth";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 // GET /api/inventory/movements - semua pergerakan stok
 export async function GET(req: NextRequest) {
@@ -19,6 +21,7 @@ export async function GET(req: NextRequest) {
 // IN: Debit Persediaan, Kredit Kas/Bank
 // OUT: Debit HPP, Kredit Persediaan
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
   try {
     const body = await req.json();
     const { itemId, date, type, quantity, unitPrice, reference, description, bankAccountId } = body;
@@ -99,16 +102,15 @@ export async function POST(req: NextRequest) {
         newQty = item.quantityOnHand + qty;
       }
 
-      const entry = await tx.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(tx, {
           entryNumber,
           date: new Date(date),
           description: `${type === "IN" ? "Penerimaan" : type === "OUT" ? "Pengeluaran" : "Penyesuaian"} stok ${item.name} (${qty} ${item.unit})`,
           reference: reference || `${type}-${item.code}`,
           source: "MANUAL",
-          lines: { create: journalLines },
-        },
-      });
+          userId: user?.id,
+          lines: [...journalLines],
+        });
 
       // Update stok item
       await tx.inventoryItem.update({

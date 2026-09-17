@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { NORMAL_BALANCE } from "@/lib/accounting";
 import { nextCode } from "@/lib/code-gen";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 const OPENING_SOURCE = "OPENING";
 const BS_TYPES = ["ASSET", "LIABILITY", "EQUITY"] as const;
@@ -174,24 +175,20 @@ export async function POST(req: NextRequest) {
     // Buat jurnal saldo awal (nomor & prefix dari Pengaturan Perusahaan)
     const entryNumber = await nextCode(db, "opening", { date });
 
-    const entry = await db.journalEntry.create({
-      data: {
-        entryNumber,
-        date: new Date(date),
-        description: "Saldo Awal (Opening Balance)",
-        reference: "OPENING",
-        source: OPENING_SOURCE,
-        lines: {
-          create: [...journalLines, ...(autoLine ? [autoLine] : [])].map((l) => ({
-            account: { connect: { code: l.code } },
-            debit: l.debit,
-            credit: l.credit,
-            description: l.debit > 0 ? "Saldo awal - debit" : "Saldo awal - kredit",
-            ...(primaryBankByCode.has(l.code) ? { bankAccountId: primaryBankByCode.get(l.code)! } : {}),
-          })),
-        },
-      },
-      include: { lines: { include: { account: true } } },
+    const entry = await createBalancedJournal(db, {
+      entryNumber,
+      date: new Date(date),
+      description: "Saldo Awal (Opening Balance)",
+      reference: "OPENING",
+      source: OPENING_SOURCE,
+      userId: user?.id,
+      lines: [...journalLines, ...(autoLine ? [autoLine] : [])].map((l) => ({
+          accountId: (() => { const acc = accountMap.get(l.code); return acc ? acc.id : l.code; })(),
+          debit: l.debit,
+          credit: l.credit,
+          description: l.debit > 0 ? "Saldo awal - debit" : "Saldo awal - kredit",
+          ...(primaryBankByCode.has(l.code) ? { bankAccountId: primaryBankByCode.get(l.code)! } : {}),
+        })),
     });
 
     return NextResponse.json({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { nextCode } from "@/lib/code-gen";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -43,20 +44,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
       const entryNumber = await nextCode(db, "journal", { date: rm.date });
       const paymentNumber = await nextCode(db, "payment", { date: rm.date });
-      const entry = await db.journalEntry.create({
-        data: {
-          entryNumber,
-          date: rm.date,
-          description: `Reimburse ${rm.number} - ${rm.description || "Penggantian biaya"}`,
-          reference: rm.number,
-          source: "REIMBURSEMENT",
-          lines: {
-            create: [
-              { accountId: expenseAcc, debit: rm.amount, credit: 0, description: `Reimburse ${rm.number}` },
-              { accountId: bankAccId, debit: 0, credit: rm.amount, bankAccountId: rm.bankAccountId, description: `Bayar reimburse ${rm.number} dari ${bank.name}` },
-            ],
-          },
-        },
+      const entry = await createBalancedJournal(db, {
+        entryNumber,
+        date: rm.date,
+        description: `Reimburse ${rm.number} - ${rm.description || "Penggantian biaya"}`,
+        reference: rm.number,
+        source: "REIMBURSEMENT",
+        userId: user?.id,
+        lines: [
+            { accountId: expenseAcc, debit: rm.amount, credit: 0, description: `Reimburse ${rm.number}` },
+            { accountId: bankAccId, debit: 0, credit: rm.amount, bankAccountId: rm.bankAccountId, description: `Bayar reimburse ${rm.number} dari ${bank.name}` },
+        ],
       });
 
       await db.payment.create({

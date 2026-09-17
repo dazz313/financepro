@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
 import { ensureSystemAccounts } from "@/lib/ensure-system-accounts";
 import { getUserFromRequest } from "@/lib/auth";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 // GET /api/payroll - daftar payroll entries
 export async function GET(req: NextRequest) {
@@ -98,16 +99,15 @@ export async function POST(req: NextRequest) {
         journalLines.push({ accountId: bpjsAcc, debit: 0, credit: bpjsTotal, description: `BPJS (pegawai ${bpjsDeduction} + pemberi kerja ${bpjsEmployer}) ${emp.name}` });
       }
 
-      const entry = await tx.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(tx, {
           entryNumber,
           date: new Date(payDate),
           description: `Penggajian ${emp.name} - ${number} (${new Date(payPeriod).toLocaleDateString("id-ID", { month: "long", year: "numeric" })})`,
           reference: number,
           source: "MANUAL",
-          lines: { create: journalLines },
-        },
-      });
+          userId: authUser?.id,
+          lines: [...journalLines],
+        });
 
       const payroll = await tx.payrollEntry.create({
         data: {

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { monthlyDepreciation, monthsBetween, toPeriod } from "@/lib/depreciation";
 import { nextCode } from "@/lib/code-gen";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 // POST /api/fixed-assets/depreciate - jalankan penyusutan untuk satu periode
 // body: { period: "YYYY-MM", date?: "YYYY-MM-DD" }
@@ -86,21 +87,18 @@ export async function POST(req: NextRequest) {
       const newAccum = alreadyRecorded + expense;
 
       const entryNumber = await nextCode(db, "journal", { date: periodEnd });
-      const entry = await db.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(db, {
           entryNumber,
           date: periodEnd,
           description: `Penyusutan aset ${asset.code} - ${asset.name} (${period})`,
           reference: `DEP-${asset.code}-${period}`,
           source: "FIXED_ASSET",
-          lines: {
-            create: [
+          userId: user?.id,
+          lines: [
               { accountId: expenseAccId, debit: expense, credit: 0, description: `Penyusutan ${asset.name} ${period}` },
               { accountId: accumAccId, debit: 0, credit: expense, description: `Akumulasi penyusutan ${asset.name} ${period}` },
-            ],
-          },
-        },
-      });
+          ],
+        });
 
       await db.fixedAssetDepreciation.create({
         data: {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextCode } from "@/lib/code-gen";
+import { getUserFromRequest } from "@/lib/auth";
+import { createBalancedJournal } from "@/lib/accounting-engine";
 
 // GET /api/transfers - daftar transfer antar akun
 export async function GET() {
@@ -18,6 +20,7 @@ export async function GET() {
 // Jurnal: Debit akun bank TUJUAN, Kredit akun bank SUMBER
 // (kas masuk di tujuan, kas keluar dari sumber)
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
   try {
     const body = await req.json();
     const { date, amount, fromBankAccountId, toBankAccountId, description, reference } = body;
@@ -52,21 +55,18 @@ export async function POST(req: NextRequest) {
 
     const result = await db.$transaction(async (tx) => {
       // Journal: Debit akun tujuan (kas masuk), Kredit akun sumber (kas keluar)
-      const entry = await tx.journalEntry.create({
-        data: {
+      const entry = await createBalancedJournal(tx, {
           entryNumber,
           date: new Date(date),
           description: description || `Transfer ${number}: ${fromBank.name} → ${toBank.name}`,
           reference: reference || number,
           source: "TRANSFER",
-          lines: {
-            create: [
+          userId: user?.id,
+          lines: [
               { accountId: toAccId, debit: amt, credit: 0, bankAccountId: toBankAccountId, description: `Transfer masuk dari ${fromBank.name}` },
               { accountId: fromAccId, debit: 0, credit: amt, bankAccountId: fromBankAccountId, description: `Transfer keluar ke ${toBank.name}` },
-            ],
-          },
-        },
-      });
+          ],
+        });
 
       const transfer = await tx.transfer.create({
         data: {
