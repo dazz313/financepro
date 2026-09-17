@@ -70,7 +70,7 @@ export const PERMISSIONS = {
 
 export function getPermissions(role: string): (typeof PERMISSIONS)[Role] {
   if (role in PERMISSIONS) return PERMISSIONS[role as Role];
-  return PERMISSIONS.VIEWER ?? PERMISSIONS.INVENTORY_EMPLOYEE;
+  return PERMISSIONS.INVENTORY_EMPLOYEE;
 }
 
 // ============ COMPANY SETTINGS ============

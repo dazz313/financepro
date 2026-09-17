@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { toast } from "sonner";
 import {
   Building2,
@@ -13,6 +13,7 @@ import {
   ListTree,
   Palette,
   Lock,
+  UserCog,
   Save,
   Loader2,
   CheckCircle2,
@@ -1363,7 +1364,7 @@ function AppearanceTab({ data }: { data: UserPreferences }) {
   // Live-apply theme on change (instant preview, persisted on Save)
   const handleThemeChange = (value: string) => {
     update("theme", value as AppearanceForm["theme"]);
-    setTheme(value);
+    setTheme(value as "light" | "dark" | "system");
   };
 
   const dirty = isDirty(form, initial);

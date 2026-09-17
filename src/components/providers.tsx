@@ -22,12 +22,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="light"
-        enableSystem
-        disableTransitionOnChange
-      >
+      <ThemeProvider>
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       </ThemeProvider>
     </AuthProvider>
